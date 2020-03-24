@@ -1,0 +1,11 @@
+{
+  "name": "ajax-feed",
+  "version": "1.0.3",
+  "description": "",
+  "main": "ajax-feed.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Motion Tactic",
+  "license": "ISC"
+}
