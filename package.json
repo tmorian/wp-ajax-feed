@@ -1,6 +1,6 @@
 {
-  "name": "ajax-feed",
-  "version": "1.0.3",
+  "name": "wp-ajax-feed",
+  "version": "1.0.5",
   "description": "",
   "main": "ajax-feed.js",
   "scripts": {

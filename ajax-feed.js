@@ -6,6 +6,8 @@ export default class AjaxFeed {
     constructor(settings = {}) {
 
         this.filtersAreDirty = false;
+        this.initalPage = false;
+        this.appendNextHTML = false;
 
         //Map default options to the provided options
         this.options = {
@@ -16,6 +18,7 @@ export default class AjaxFeed {
             'filterForms': settings.filterForms ? settings.filterForms : null,
             'paginationContainer': settings.paginationContainer ? settings.paginationContainer : null,
             'paginationDataAttribute': settings.paginationDataAttribute ? settings.paginationDataAttribute : 'data-ajax-page',
+            'loadMoreDataAttribute': settings.loadMoreDataAttribute ? settings.loadMoreDataAttribute : 'data-load-more',
             'submitOnFilterUpdate': settings.submitOnFilterUpdate ? settings.submitOnFilterUpdate : false,
         };
 
@@ -25,11 +28,10 @@ export default class AjaxFeed {
         if (!this.validateOptions()) {
             console.log('Required options missing.');
         } else {
-
             this.getInitialParameters();
-
+            let additionalFilters = this.initalPage ? {paged: this.initalPage} : {};
             this.bindEvents();
-            this.getFeed();
+            this.getFeed(additionalFilters);
         }
     }
 
@@ -54,11 +56,17 @@ export default class AjaxFeed {
      */
     getInitialParameters() {
         let params = deparam(window.location.search.substr(1));
+        if (params.paged && parseInt(params.paged) > 1) this.initalPage = parseInt(params.paged);
 
         $(this.options.filterForms).each((i, form) => {
                 populate(form, params);
+                $(form).find('select').each((index, el) => {
+                    if (el.selectize && params[el.name] && el.selectize.options[params[el.name]]) el.selectize.setValue(params[el.name]);
+                });
             }
         );
+
+        $(window).trigger('formUpdatedFromURL', params);
     }
 
     /**
@@ -94,7 +102,7 @@ export default class AjaxFeed {
                 data: $.param(this.filters),
             })
             .done((res) => {
-                this.handleResponse(JSON.parse(res));
+                this.handleResponse(res);
             })
             .fail((data) => {
                 $(window).trigger(this.geteventName('onError'), data);
@@ -106,8 +114,18 @@ export default class AjaxFeed {
         //After update Event
         $(window).trigger(this.geteventName('afterFeedUpdate'), this);
 
-        //Set the HTML of the container
-        if (this.options.container) $(this.options.container).html(res.html);
+        if (this.options.container) {
+
+            if (this.appendNextHTML) {
+
+                $(this.options.container).append(res.html);
+
+            } else {
+
+                $(this.options.container).html(res.html);
+            }
+
+        }
 
         //Set the HTML of the pagination
         if (this.options.paginationContainer) $(this.options.paginationContainer).html(res.pagination);
@@ -119,6 +137,17 @@ export default class AjaxFeed {
                 window.location.href.split('?')[0] + '?' + $.param(this.filters)
             );
         }
+
+        let loadMoreBtns = $(`*[${this.options.loadMoreDataAttribute}]`);
+
+        loadMoreBtns.attr(this.options.loadMoreDataAttribute, ++res.currentPage);
+
+        if (res.currentPage > res.maxPages) {
+            loadMoreBtns.hide();
+        } else {
+            loadMoreBtns.show();
+        }
+        this.appendNextHTML = false;
     }
 
     bindEvents() {
@@ -128,8 +157,21 @@ export default class AjaxFeed {
         //Updating on pagination change
         $(document).on('click', `*[${this.options.paginationDataAttribute}]`, function (e) {
             e.preventDefault();
+            _this.filtersAreDirty = true;
+
             _this.getFeed({
-                'page': $(this).attr(_this.options.paginationDataAttribute),
+                'paged': $(this).attr(_this.options.paginationDataAttribute),
+            });
+        });
+
+        //Updating on load more click
+        $(document).on('click', `*[${this.options.loadMoreDataAttribute}]`, function (e) {
+            e.preventDefault();
+            _this.filtersAreDirty = true;
+            _this.appendNextHTML = true;
+
+            _this.getFeed({
+                'paged': $(this).attr(_this.options.loadMoreDataAttribute),
             });
         });
 
@@ -142,7 +184,7 @@ export default class AjaxFeed {
         $(this.options.filterForms).submit((e) => {
             e.preventDefault();
             this.getFeed();
-        })
+        });
 
         //Updating on filter form change
         if (this.options.submitOnFilterUpdate) {
